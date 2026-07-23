@@ -78,22 +78,26 @@ export function setupGameHandlers(io: Server, socket: Socket): void {
     });
   });
 
-  socket.on('leave-room', async (data: { roomId: string; phoneNumber: string }) => {
+  socket.on('leave-room', async (
+    data: { roomId: string; phoneNumber: string },
+    acknowledge?: () => void
+  ) => {
     const { roomId, phoneNumber } = data;
+    const game = await roomManager.getActiveGame(roomId);
+    const closedBy = game?.players[0] === phoneNumber ? 'Host' : 'Partner';
 
-    await roomManager.removePlayer(roomId, phoneNumber);
+    // Notify the remaining player before any database work or disconnection.
+    socket.to(roomId).emit('game-closed', { closedBy });
+    socket.data.didLeave = true;
+    acknowledge?.();
     socket.leave(roomId);
 
-    socket.to(roomId).emit('player-left', { phoneNumber });
-
-    setTimeout(() => {
-      roomManager.deleteRoom(roomId);
-    }, 5000);
+    await roomManager.deleteRoom(roomId);
   });
 
   socket.on('disconnect', () => {
     const { roomId, phoneNumber } = socket.data;
-    if (!roomId || !phoneNumber) return;
+    if (!roomId || !phoneNumber || socket.data.didLeave) return;
 
     // Allow refreshes and short network interruptions without ending the game.
     setTimeout(async () => {

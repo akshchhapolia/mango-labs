@@ -54,6 +54,7 @@ export interface ServerToClientEvents {
     board: Board;
   }) => void;
   'player-left': (data: { phoneNumber: string }) => void;
+  'game-closed': (data: { closedBy: 'Host' | 'Partner' }) => void;
   'restart': (data: { board: Board; currentTurn: PlayerSymbol }) => void;
   'error': (data: { message: string }) => void;
   'game-state': (data: {
