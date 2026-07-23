@@ -33,18 +33,28 @@ export async function joinRoom(req: Request, res: Response): Promise<void> {
     return;
   }
 
-  const result = await roomManager.joinRoom(id, phoneNumber);
-
-  if ('error' in result) {
-    res.status(400).json({ success: false, error: result.error });
+  const room = await roomManager.getRoom(id);
+  if (!room) {
+    res.status(404).json({ success: false, error: 'Room not found' });
     return;
   }
 
+  if (room.status !== 'WAITING') {
+    res.status(400).json({ success: false, error: 'Game already in progress or finished' });
+    return;
+  }
+
+  if (Date.now() > room.expires_at.getTime()) {
+    res.status(400).json({ success: false, error: 'Room has expired' });
+    return;
+  }
+
+  // Don't mutate state here — the socket join-room event handles it
   res.json({
     success: true,
     data: {
-      roomId: result.room.id,
-      status: result.room.status,
+      roomId: room.id,
+      status: room.status,
     },
   });
 }
