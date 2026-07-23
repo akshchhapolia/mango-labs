@@ -16,6 +16,7 @@ export default function App() {
     setError,
     playerSymbol,
     isHost,
+    loading,
     handleCreateRoom,
     handleJoinRoom,
     handleMakeMove,
@@ -24,7 +25,7 @@ export default function App() {
     copyInviteLink,
   } = useGame();
 
-  // Handle joining from invite link
+  // Handle joining from invite link URL
   useEffect(() => {
     const pathParts = window.location.pathname.split('/');
     if (pathParts[1] === 'join' && pathParts[2]) {
@@ -32,13 +33,12 @@ export default function App() {
       if (phoneNumber) {
         handleJoinRoom(roomIdFromUrl);
       } else {
-        // Store the room ID and show the home screen first
         sessionStorage.setItem('pendingRoomId', roomIdFromUrl);
       }
     }
   }, []);
 
-  // If there's a pending room join after phone number entry
+  // Auto-join once phone is entered after receiving an invite link
   useEffect(() => {
     const pendingRoomId = sessionStorage.getItem('pendingRoomId');
     if (pendingRoomId && phoneNumber && screen === 'home') {
@@ -57,6 +57,7 @@ export default function App() {
           onJoinRoom={handleJoinRoom}
           error={error}
           setError={setError}
+          loading={loading}
         />
       )}
 
