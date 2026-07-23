@@ -2,7 +2,9 @@ import { Pool, QueryResult } from 'pg';
 import { Room } from '../models/types';
 
 const pool = new Pool({
-  connectionString: process.env.DATABASE_URL,
+  host: 'localhost',
+  port: 5432,
+  database: 'couple_game',
   max: 10,
   idleTimeoutMillis: 30000,
 });
@@ -24,10 +26,7 @@ export async function insertRoom(room: Room): Promise<void> {
 }
 
 export async function getRoomById(roomId: string): Promise<Room | undefined> {
-  const result = await query(
-    'SELECT * FROM rooms WHERE id = $1',
-    [roomId]
-  );
+  const result = await query('SELECT * FROM rooms WHERE id = $1', [roomId]);
   if (result.rows.length === 0) return undefined;
   const row = result.rows[0];
   return {
@@ -41,10 +40,7 @@ export async function getRoomById(roomId: string): Promise<Room | undefined> {
 }
 
 export async function updateRoomStatus(roomId: string, status: string): Promise<void> {
-  await query(
-    'UPDATE rooms SET status = $1 WHERE id = $2',
-    [status, roomId]
-  );
+  await query('UPDATE rooms SET status = $1 WHERE id = $2', [status, roomId]);
 }
 
 export async function deleteRoomFromDb(roomId: string): Promise<void> {
