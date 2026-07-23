@@ -8,6 +8,8 @@ import { Server } from 'socket.io';
 import roomRoutes from './routes/roomRoutes';
 import { setupGameHandlers } from './socket/gameHandler';
 import { roomManager } from './services/roomManager';
+import { closePool } from './services/db';
+import { disconnectRedis } from './services/redis';
 
 const PORT = process.env.PORT || 3001;
 const CORS_ORIGIN = process.env.CORS_ORIGIN || 'http://localhost:5173';
@@ -40,10 +42,29 @@ io.on('connection', (socket) => {
 });
 
 // Periodic room cleanup
-setInterval(() => {
+const cleanupInterval = setInterval(() => {
   roomManager.cleanupExpiredRooms();
 }, 60 * 1000); // every minute
 
 server.listen(PORT, () => {
   console.log(`Backend running on port ${PORT}`);
 });
+
+// Graceful shutdown
+process.on('SIGTERM', async () => {
+  console.log('SIGTERM received. Shutting down gracefully...');
+  await shutdown();
+});
+
+process.on('SIGINT', async () => {
+  console.log('SIGINT received. Shutting down gracefully...');
+  await shutdown();
+});
+
+async function shutdown() {
+  clearInterval(cleanupInterval);
+  server.close();
+  await closePool();
+  await disconnectRedis();
+  process.exit(0);
+}
