@@ -84,10 +84,11 @@ export function setupGameHandlers(io: Server, socket: Socket): void {
   ) => {
     const { roomId, phoneNumber } = data;
     const game = await roomManager.getActiveGame(roomId);
-    const closedBy = game?.players[0] === phoneNumber ? 'Host' : 'Partner';
+    const closedByName = game?.playerNames?.[phoneNumber] ||
+      (game?.players[0] === phoneNumber ? 'Host' : 'Partner');
 
     // Notify the remaining player before any database work or disconnection.
-    socket.to(roomId).emit('game-closed', { closedBy });
+    socket.to(roomId).emit('game-closed', { closedByName });
     socket.data.didLeave = true;
     acknowledge?.();
     socket.leave(roomId);
@@ -107,9 +108,10 @@ export function setupGameHandlers(io: Server, socket: Socket): void {
       );
 
       if (!hasReconnected) {
-        await roomManager.removePlayer(roomId, phoneNumber);
-        io.to(roomId).emit('player-left', { phoneNumber });
-        setTimeout(() => roomManager.deleteRoom(roomId), 5000);
+        const game = await roomManager.getActiveGame(roomId);
+        const closedByName = game?.playerNames?.[phoneNumber] || 'The other player';
+        io.to(roomId).emit('game-closed', { closedByName });
+        await roomManager.deleteRoom(roomId);
       }
     }, 15000);
   });

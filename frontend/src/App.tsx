@@ -4,6 +4,7 @@ import HomeScreen from './pages/HomeScreen';
 import WaitingScreen from './pages/WaitingScreen';
 import GameScreen from './pages/GameScreen';
 import ResultScreen from './pages/ResultScreen';
+import ClosedScreen from './pages/ClosedScreen';
 
 export default function App() {
   const [pendingRoomId, setPendingRoomId] = useState<string | null>(() => {
@@ -24,11 +25,13 @@ export default function App() {
     playerSymbol,
     isHost,
     loading,
+    closedByName,
     handleCreateRoom,
     handleJoinRoom,
     handleMakeMove,
     handleRestart,
     handleExit,
+    handleReturnHome,
     copyInviteLink,
   } = useGame();
 
@@ -81,6 +84,14 @@ export default function App() {
           playerNames={gameState.playerNames}
           onCellClick={handleMakeMove}
           onExit={handleExit}
+        />
+      )}
+
+
+      {screen === 'closed' && (
+        <ClosedScreen
+          closedByName={closedByName}
+          onReturnHome={handleReturnHome}
         />
       )}
 

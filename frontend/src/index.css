@@ -467,3 +467,5 @@ body {
 .input-label-spaced { margin-top: 1rem; }
 .invite-message { color: var(--accent); margin-bottom: 1.25rem; font-weight: 600; }
 .btn:disabled { opacity: 0.65; cursor: not-allowed; }
+
+.closed-message { color: var(--text-muted); margin: -0.5rem 0 1.5rem; }

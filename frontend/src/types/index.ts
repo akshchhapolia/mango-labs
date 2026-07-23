@@ -16,4 +16,4 @@ export interface GameState {
   winner: PlayerSymbol | 'draw' | null;
 }
 
-export type Screen = 'home' | 'waiting' | 'game' | 'result';
+export type Screen = 'home' | 'waiting' | 'game' | 'result' | 'closed';

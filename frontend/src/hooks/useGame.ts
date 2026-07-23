@@ -70,6 +70,7 @@ export function useGame() {
   const [error, setError] = useState('');
   const [isHost, setIsHost] = useState(false);
   const [loading, setLoading] = useState(false);
+  const [closedByName, setClosedByName] = useState('');
   const socketRef = useRef<ReturnType<typeof connectSocket> | null>(null);
   const cleanupRef = useRef<(() => void) | null>(null);
 
@@ -134,10 +135,35 @@ export function useGame() {
     socket.on('restart', onRestart);
     listeners.push(() => socket.off('restart', onRestart));
 
-    const onPlayerLeft = () => {
-      setError('Your partner left the game');
+
+    const resetAfterClosure = (name: string) => {
       clearSession();
-      setScreen('home');
+      clearListeners();
+      disconnectSocket();
+      socketRef.current = null;
+      setClosedByName(name);
+      setScreen('closed');
+      setRoomId('');
+      setInviteLink('');
+      setGameState({
+        board: Array(9).fill(null),
+        currentTurn: 'X',
+        players: [],
+        playerNames: {},
+        status: 'WAITING',
+        winner: null,
+      });
+      setError('');
+    };
+
+    const onGameClosed = (data: { closedByName: string }) => {
+      resetAfterClosure(data.closedByName);
+    };
+    socket.on('game-closed', onGameClosed);
+    listeners.push(() => socket.off('game-closed', onGameClosed));
+
+    const onPlayerLeft = () => {
+      resetAfterClosure('The other player');
     };
     socket.on('player-left', onPlayerLeft);
     listeners.push(() => socket.off('player-left', onPlayerLeft));
@@ -284,31 +310,54 @@ export function useGame() {
   }, [roomId, phoneNumber]);
 
   const handleExit = useCallback(() => {
-    if (socketRef.current) {
-      socketRef.current.emit('leave-room', { roomId, phoneNumber });
-      socketRef.current.off();
-      socketRef.current.disconnect();
+    const socket = socketRef.current;
+    const wasGuest = phoneNumber.startsWith('guest-');
+
+    const resetLocalState = () => {
+      socket?.off();
+      socket?.disconnect();
+      socketRef.current = null;
+      disconnectSocket();
+      clearListeners();
+      clearSession();
+      setScreen('home');
+      if (wasGuest) {
+        setPhoneNumber('');
+        setDisplayName('');
+      }
+      setRoomId('');
+      setInviteLink('');
+      setGameState({
+        board: Array(9).fill(null),
+        currentTurn: 'X',
+        players: [],
+        playerNames: {},
+        status: 'WAITING',
+        winner: null,
+      });
+      setIsHost(false);
+      setError('');
+    };
+
+    if (socket?.connected) {
+      socket.emit('leave-room', { roomId, phoneNumber }, resetLocalState);
+      setTimeout(resetLocalState, 1000);
+    } else {
+      resetLocalState();
     }
-    disconnectSocket();
-    clearListeners();
-    clearSession();
-    setScreen('home');
-    if (phoneNumber.startsWith('guest-')) {
+  }, [roomId, phoneNumber, clearListeners]);
+
+  const handleReturnHome = useCallback(() => {
+    const wasGuest = phoneNumber.startsWith('guest-');
+    if (wasGuest) {
       setPhoneNumber('');
+      setDisplayName('');
     }
-    setRoomId('');
-    setInviteLink('');
-    setGameState({
-      board: Array(9).fill(null),
-      currentTurn: 'X',
-      players: [],
-      playerNames: {},
-      status: 'WAITING',
-      winner: null,
-    });
+    setClosedByName('');
     setIsHost(false);
     setError('');
-  }, [roomId, phoneNumber, clearListeners]);
+    setScreen('home');
+  }, [phoneNumber]);
 
   const copyInviteLink = useCallback(() => {
     if (inviteLink) {
@@ -337,11 +386,13 @@ export function useGame() {
     isHost,
     playerSymbol,
     loading,
+    closedByName,
     handleCreateRoom,
     handleJoinRoom,
     handleMakeMove,
     handleRestart,
     handleExit,
+    handleReturnHome,
     copyInviteLink,
   };
 }
