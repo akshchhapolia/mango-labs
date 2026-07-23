@@ -7,7 +7,7 @@ import { saveGame, getGame, deleteGame } from './redis';
 const ROOM_EXPIRY_MS = 30 * 60 * 1000; // 30 minutes
 
 class RoomManager {
-  async createRoom(hostPhone: string): Promise<{ room: Room; game: ActiveGame }> {
+  async createRoom(hostPhone: string, hostName: string): Promise<{ room: Room; game: ActiveGame }> {
     const roomId = uuidv4().slice(0, 8);
     const now = new Date();
 
@@ -23,6 +23,7 @@ class RoomManager {
     const game: ActiveGame = {
       roomId,
       players: [hostPhone],
+      playerNames: { [hostPhone]: hostName },
       board: TicTacToeEngine.createBoard(),
       currentTurn: 'X',
       winner: null,
@@ -54,6 +55,7 @@ class RoomManager {
   async joinRoom(
     roomId: string,
     phoneNumber: string,
+    displayName: string,
     isReconnect: boolean = false
   ): Promise<{ room: Room; game: ActiveGame } | { error: string }> {
     const room = await getRoomById(roomId);
@@ -71,12 +73,17 @@ class RoomManager {
       if (!game.players.includes(phoneNumber)) {
         return { error: 'Player not found in this game' };
       }
+      game.playerNames = game.playerNames || {};
+      game.playerNames[phoneNumber] = displayName;
+      await saveGame(game);
       return { room, game };
     }
 
     if (room.status !== 'WAITING') return { error: 'Game already in progress or finished' };
 
     game.players.push(phoneNumber);
+    game.playerNames = game.playerNames || {};
+    game.playerNames[phoneNumber] = displayName;
     room.status = 'PLAYING';
 
     await updateRoomStatus(roomId, 'PLAYING');

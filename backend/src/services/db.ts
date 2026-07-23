@@ -49,7 +49,7 @@ export async function deleteRoomFromDb(roomId: string): Promise<void> {
 
 export async function cleanupExpiredRoomsFromDb(): Promise<void> {
   await query(
-    "DELETE FROM rooms WHERE expires_at < NOW() OR status IN ('FINISHED', 'EXPIRED')"
+    "DELETE FROM rooms WHERE expires_at < NOW() OR status = 'EXPIRED'"
   );
 }
 

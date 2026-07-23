@@ -11,6 +11,7 @@ export interface GameState {
   board: Board;
   currentTurn: PlayerSymbol;
   players: string[];
+  playerNames: Record<string, string>;
   status: string;
   winner: PlayerSymbol | 'draw' | null;
 }

@@ -23,6 +23,7 @@ const STORAGE_KEY = 'couple_game_session';
 
 interface StoredSession {
   phoneNumber: string;
+  displayName: string;
   roomId: string;
   isHost: boolean;
 }
@@ -53,6 +54,7 @@ function clearSession(): void {
 }
 
 export function useGame() {
+  const [displayName, setDisplayName] = useState('');
   const [phoneNumber, setPhoneNumber] = useState('');
   const [roomId, setRoomId] = useState('');
   const [screen, setScreen] = useState<Screen>('home');
@@ -60,6 +62,7 @@ export function useGame() {
     board: Array(9).fill(null),
     currentTurn: 'X',
     players: [],
+    playerNames: {},
     status: 'WAITING',
     winner: null,
   });
@@ -79,14 +82,14 @@ export function useGame() {
     }
   }, []);
 
-  const setupSocketListeners = useCallback((rid: string) => {
+  const setupSocketListeners = useCallback((rid: string, identityPhone = phoneNumber, identityName = displayName) => {
     // Clear any existing listeners first
     clearListeners();
 
     const socket = connectSocket();
     socketRef.current = socket;
 
-    socket.emit('join-room', { roomId: rid, phoneNumber });
+    socket.emit('join-room', { roomId: rid, phoneNumber: identityPhone, displayName: identityName });
 
     const listeners: (() => void)[] = [];
 
@@ -141,8 +144,6 @@ export function useGame() {
 
     const onError = (data: { message: string }) => {
       setError(data.message);
-      clearSession();
-      setScreen('home');
     };
     socket.on('error', onError);
     listeners.push(() => socket.off('error', onError));
@@ -151,6 +152,7 @@ export function useGame() {
       board: Board;
       currentTurn: PlayerSymbol;
       players: string[];
+      playerNames: Record<string, string>;
       status: string;
       winner: PlayerSymbol | 'draw' | null;
     }) => {
@@ -158,10 +160,13 @@ export function useGame() {
         board: data.board,
         currentTurn: data.currentTurn,
         players: data.players,
+        playerNames: data.playerNames || {},
         status: data.status,
         winner: data.winner,
       });
-      if (data.status === 'PLAYING' && data.players.length === 2) {
+      if (data.winner) {
+        setScreen('result');
+      } else if (data.status === 'PLAYING' && data.players.length === 2) {
         setScreen('game');
       }
     };
@@ -171,12 +176,13 @@ export function useGame() {
     cleanupRef.current = () => {
       listeners.forEach((fn) => fn());
     };
-  }, [phoneNumber, clearListeners]);
+  }, [phoneNumber, displayName, clearListeners]);
 
   // Restore session on mount (reconnection after refresh)
   // Skip if the user opened an invite link (handled by App.tsx)
   useEffect(() => {
-    const pendingRoomId = sessionStorage.getItem('pendingRoomId');
+    const pathParts = window.location.pathname.split('/');
+    const pendingRoomId = pathParts[1] === 'join' && pathParts[2] ? pathParts[2] : null;
     if (pendingRoomId) {
       // Invite link flow will take over — clear any stale session
       clearSession();
@@ -186,12 +192,13 @@ export function useGame() {
     const session = loadSession();
     if (session) {
       setPhoneNumber(session.phoneNumber);
+      setDisplayName(session.displayName || 'Player');
       setRoomId(session.roomId);
       setIsHost(session.isHost);
       if (session.isHost && screen === 'home') {
         setInviteLink(`${window.location.origin}/join/${session.roomId}`);
       }
-      setupSocketListeners(session.roomId);
+      setupSocketListeners(session.roomId, session.phoneNumber, session.displayName || 'Player');
     }
 
     return () => {
@@ -202,15 +209,15 @@ export function useGame() {
   }, []);
 
   const handleCreateRoom = useCallback(async () => {
-    if (!phoneNumber.trim()) {
-      setError('Please enter your phone number');
+    if (!displayName.trim() || !phoneNumber.trim()) {
+      setError('Please enter your name and phone number');
       return;
     }
     setError('');
     setLoading(true);
 
     try {
-      const res = await createRoom(phoneNumber.trim());
+      const res = await createRoom(phoneNumber.trim(), displayName.trim());
       if (!res.success || !res.data) {
         setError(res.error || 'Failed to create room');
         return;
@@ -220,7 +227,7 @@ export function useGame() {
       setRoomId(data.roomId);
       setInviteLink(data.inviteLink);
       setIsHost(true);
-      saveSession({ phoneNumber: phoneNumber.trim(), roomId: data.roomId, isHost: true });
+      saveSession({ phoneNumber: phoneNumber.trim(), displayName: displayName.trim(), roomId: data.roomId, isHost: true });
       setupSocketListeners(data.roomId);
       setScreen('waiting');
     } catch {
@@ -228,27 +235,32 @@ export function useGame() {
     } finally {
       setLoading(false);
     }
-  }, [phoneNumber, setupSocketListeners]);
+  }, [phoneNumber, displayName, setupSocketListeners]);
 
   const handleJoinRoom = useCallback(async (rid: string) => {
-    if (!phoneNumber.trim()) {
-      setError('Please enter your phone number');
+    if (!displayName.trim()) {
+      setError('Please enter your name');
       return false;
     }
     setError('');
     setLoading(true);
 
+    // Invited partners do not need to provide a phone number. A private,
+    // room-scoped identifier is generated for gameplay and reconnection.
+    const playerId = phoneNumber.trim() || `guest-${rid}-${crypto.randomUUID()}`;
+
     try {
-      const res = await joinRoomApi(rid, phoneNumber.trim());
+      const res = await joinRoomApi(rid, playerId, displayName.trim());
       if (!res.success || !res.data) {
         setError(res.error || 'Failed to join room');
         return false;
       }
 
+      setPhoneNumber(playerId);
       setRoomId(rid);
       setIsHost(false);
-      saveSession({ phoneNumber: phoneNumber.trim(), roomId: rid, isHost: false });
-      setupSocketListeners(rid);
+      saveSession({ phoneNumber: playerId, displayName: displayName.trim(), roomId: rid, isHost: false });
+      setupSocketListeners(rid, playerId, displayName.trim());
       return true;
     } catch {
       setError('Network error. Please try again.');
@@ -256,7 +268,7 @@ export function useGame() {
     } finally {
       setLoading(false);
     }
-  }, [phoneNumber, setupSocketListeners]);
+  }, [phoneNumber, displayName, setupSocketListeners]);
 
   const handleMakeMove = useCallback((position: number) => {
     if (!socketRef.current || gameState.winner) return;
@@ -281,12 +293,16 @@ export function useGame() {
     clearListeners();
     clearSession();
     setScreen('home');
+    if (phoneNumber.startsWith('guest-')) {
+      setPhoneNumber('');
+    }
     setRoomId('');
     setInviteLink('');
     setGameState({
       board: Array(9).fill(null),
       currentTurn: 'X',
       players: [],
+      playerNames: {},
       status: 'WAITING',
       winner: null,
     });
@@ -308,6 +324,8 @@ export function useGame() {
   }, [clearListeners]);
 
   return {
+    displayName,
+    setDisplayName,
     phoneNumber,
     setPhoneNumber,
     roomId,

@@ -3,13 +3,13 @@ import { roomManager } from '../services/roomManager';
 import { MakeMoveData } from '../models/types';
 
 export function setupGameHandlers(io: Server, socket: Socket): void {
-  socket.on('join-room', async (data: { roomId: string; phoneNumber: string }) => {
-    const { roomId, phoneNumber } = data;
+  socket.on('join-room', async (data: { roomId: string; phoneNumber: string; displayName: string }) => {
+    const { roomId, phoneNumber, displayName } = data;
 
     const existingGame = await roomManager.getActiveGame(roomId);
     const isReconnect = existingGame?.players.includes(phoneNumber) ?? false;
 
-    const result = await roomManager.joinRoom(roomId, phoneNumber, isReconnect);
+    const result = await roomManager.joinRoom(roomId, phoneNumber, displayName, isReconnect);
     if ('error' in result) {
       socket.emit('error', { message: result.error });
       return;
@@ -20,15 +20,16 @@ export function setupGameHandlers(io: Server, socket: Socket): void {
     socket.data.phoneNumber = phoneNumber;
 
     if (!isReconnect) {
-      socket.to(roomId).emit('player-joined', { phoneNumber });
+      socket.to(roomId).emit('player-joined', { phoneNumber, displayName });
     }
 
     const game = await roomManager.getActiveGame(roomId);
     if (game) {
-      socket.emit('game-state', {
+      io.to(roomId).emit('game-state', {
         board: game.board,
         currentTurn: game.currentTurn,
         players: game.players,
+        playerNames: game.playerNames || {},
         status: game.players.length === 2 ? 'PLAYING' : 'WAITING',
         winner: game.winner,
       });
@@ -94,23 +95,18 @@ export function setupGameHandlers(io: Server, socket: Socket): void {
     const { roomId, phoneNumber } = socket.data;
     if (!roomId || !phoneNumber) return;
 
-    // Give the player a grace period to reconnect before removing them
-    const roomSockets = io.sockets.adapter.rooms.get(roomId);
-    const hasOtherSocket = roomSockets && roomSockets.size > 0;
+    // Allow refreshes and short network interruptions without ending the game.
+    setTimeout(async () => {
+      const roomSocketIds = io.sockets.adapter.rooms.get(roomId) ?? new Set<string>();
+      const hasReconnected = [...roomSocketIds].some((socketId) =>
+        io.sockets.sockets.get(socketId)?.data.phoneNumber === phoneNumber
+      );
 
-    if (!hasOtherSocket) {
-      const disconnectTimeout = setTimeout(async () => {
-        const stillEmpty = io.sockets.adapter.rooms.get(roomId);
-        if (!stillEmpty || stillEmpty.size === 0) {
-          await roomManager.removePlayer(roomId, phoneNumber);
-          socket.to(roomId).emit('player-left', { phoneNumber });
-          setTimeout(() => roomManager.deleteRoom(roomId), 5000);
-        }
-      }, 15000);
-
-      socket.data.disconnectTimeout = disconnectTimeout;
-    } else {
-      socket.to(roomId).emit('player-left', { phoneNumber });
-    }
+      if (!hasReconnected) {
+        await roomManager.removePlayer(roomId, phoneNumber);
+        io.to(roomId).emit('player-left', { phoneNumber });
+        setTimeout(() => roomManager.deleteRoom(roomId), 5000);
+      }
+    }, 15000);
   });
 }

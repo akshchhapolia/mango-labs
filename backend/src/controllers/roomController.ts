@@ -5,14 +5,14 @@ import { CreateRoomRequest, JoinRoomRequest } from '../models/types';
 const BASE_URL = process.env.BASE_URL || 'http://localhost:5173';
 
 export async function createRoom(req: Request, res: Response): Promise<void> {
-  const { hostPhone } = req.body as CreateRoomRequest;
+  const { hostPhone, hostName } = req.body as CreateRoomRequest;
 
-  if (!hostPhone) {
-    res.status(400).json({ success: false, error: 'Phone number is required' });
+  if (!hostPhone || !hostName?.trim()) {
+    res.status(400).json({ success: false, error: 'Name and phone number are required' });
     return;
   }
 
-  const { room, game } = await roomManager.createRoom(hostPhone);
+  const { room, game } = await roomManager.createRoom(hostPhone, hostName.trim());
 
   res.status(201).json({
     success: true,
@@ -26,10 +26,10 @@ export async function createRoom(req: Request, res: Response): Promise<void> {
 
 export async function joinRoom(req: Request, res: Response): Promise<void> {
   const { id } = req.params;
-  const { phoneNumber } = req.body as JoinRoomRequest;
+  const { phoneNumber, displayName } = req.body as JoinRoomRequest;
 
-  if (!phoneNumber) {
-    res.status(400).json({ success: false, error: 'Phone number is required' });
+  if (!phoneNumber || !displayName?.trim()) {
+    res.status(400).json({ success: false, error: 'Name and phone number are required' });
     return;
   }
 

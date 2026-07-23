@@ -6,6 +6,9 @@ interface GameScreenProps {
   currentTurn: PlayerSymbol;
   playerSymbol: PlayerSymbol;
   isHost: boolean;
+  phoneNumber: string;
+  players: string[];
+  playerNames: Record<string, string>;
   onCellClick: (index: number) => void;
   onExit: () => void;
 }
@@ -31,18 +34,23 @@ export default function GameScreen({
   currentTurn,
   playerSymbol,
   isHost,
+  phoneNumber,
+  players,
+  playerNames,
   onCellClick,
   onExit,
 }: GameScreenProps) {
   const isMyTurn = currentTurn === playerSymbol;
   const winningCombo = getWinningCombo(board);
+  const hostName = playerNames[players[0]] || (isHost ? 'You' : 'Partner');
+  const partnerName = playerNames[players[1]] || (isHost ? 'Partner' : 'You');
 
   return (
     <div className="screen game-screen">
       <div className="game-header">
         <div className="player-indicator">
           <span className="symbol-badge" data-symbol="X">X</span>
-          <span className="player-label">{isHost ? 'You' : 'Partner'}</span>
+          <span className="player-label">{players[0] === phoneNumber ? 'You' : hostName}</span>
         </div>
         <div className="turn-indicator">
           {isMyTurn ? (
@@ -53,7 +61,7 @@ export default function GameScreen({
         </div>
         <div className="player-indicator">
           <span className="symbol-badge" data-symbol="O">O</span>
-          <span className="player-label">{isHost ? 'Partner' : 'You'}</span>
+          <span className="player-label">{players[1] === phoneNumber ? 'You' : partnerName}</span>
         </div>
       </div>
 

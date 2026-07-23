@@ -1,4 +1,4 @@
-import { useEffect } from 'react';
+import { useState } from 'react';
 import { useGame } from './hooks/useGame';
 import HomeScreen from './pages/HomeScreen';
 import WaitingScreen from './pages/WaitingScreen';
@@ -6,7 +6,14 @@ import GameScreen from './pages/GameScreen';
 import ResultScreen from './pages/ResultScreen';
 
 export default function App() {
+  const [pendingRoomId, setPendingRoomId] = useState<string | null>(() => {
+    const parts = window.location.pathname.split('/');
+    return parts[1] === 'join' && parts[2] ? parts[2] : null;
+  });
+
   const {
+    displayName,
+    setDisplayName,
     phoneNumber,
     setPhoneNumber,
     screen,
@@ -25,35 +32,29 @@ export default function App() {
     copyInviteLink,
   } = useGame();
 
-  // Handle joining from invite link URL
-  useEffect(() => {
-    const pathParts = window.location.pathname.split('/');
-    if (pathParts[1] === 'join' && pathParts[2]) {
-      const roomIdFromUrl = pathParts[2];
-      if (phoneNumber) {
-        handleJoinRoom(roomIdFromUrl);
-      } else {
-        sessionStorage.setItem('pendingRoomId', roomIdFromUrl);
+  const handlePrimaryAction = async () => {
+    if (pendingRoomId) {
+      const joined = await handleJoinRoom(pendingRoomId);
+      if (joined) {
+        sessionStorage.removeItem('pendingRoomId');
+        setPendingRoomId(null);
+        window.history.replaceState({}, '', '/');
       }
+      return;
     }
-  }, []);
-
-  // Auto-join once phone is entered after receiving an invite link
-  useEffect(() => {
-    const pendingRoomId = sessionStorage.getItem('pendingRoomId');
-    if (pendingRoomId && phoneNumber && screen === 'home') {
-      sessionStorage.removeItem('pendingRoomId');
-      handleJoinRoom(pendingRoomId);
-    }
-  }, [phoneNumber, screen, handleJoinRoom]);
+    await handleCreateRoom();
+  };
 
   return (
     <div className="app">
       {screen === 'home' && (
         <HomeScreen
+          displayName={displayName}
+          setDisplayName={setDisplayName}
+          pendingRoomId={pendingRoomId}
           phoneNumber={phoneNumber}
           setPhoneNumber={setPhoneNumber}
-          onCreateRoom={handleCreateRoom}
+          onCreateRoom={handlePrimaryAction}
           onJoinRoom={handleJoinRoom}
           error={error}
           setError={setError}
@@ -75,6 +76,9 @@ export default function App() {
           currentTurn={gameState.currentTurn}
           playerSymbol={playerSymbol}
           isHost={isHost}
+          phoneNumber={phoneNumber}
+          players={gameState.players}
+          playerNames={gameState.playerNames}
           onCellClick={handleMakeMove}
           onExit={handleExit}
         />

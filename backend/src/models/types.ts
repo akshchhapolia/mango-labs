@@ -14,6 +14,7 @@ export interface Room {
 export interface ActiveGame {
   roomId: string;
   players: string[];
+  playerNames: Record<string, string>;
   board: Board;
   currentTurn: PlayerSymbol;
   winner: PlayerSymbol | 'draw' | null;
@@ -21,10 +22,12 @@ export interface ActiveGame {
 
 export interface CreateRoomRequest {
   hostPhone: string;
+  hostName: string;
 }
 
 export interface JoinRoomRequest {
   phoneNumber: string;
+  displayName: string;
 }
 
 export interface MakeMoveData {
@@ -40,7 +43,7 @@ export interface ApiResponse<T = unknown> {
 }
 
 export interface ServerToClientEvents {
-  'player-joined': (data: { phoneNumber: string }) => void;
+  'player-joined': (data: { phoneNumber: string; displayName: string }) => void;
   'move-made': (data: {
     board: Board;
     currentTurn: PlayerSymbol;
@@ -57,13 +60,14 @@ export interface ServerToClientEvents {
     board: Board;
     currentTurn: PlayerSymbol;
     players: string[];
+    playerNames: Record<string, string>;
     status: string;
     winner: PlayerSymbol | 'draw' | null;
   }) => void;
 }
 
 export interface ClientToServerEvents {
-  'join-room': (data: { roomId: string; phoneNumber: string }) => void;
+  'join-room': (data: { roomId: string; phoneNumber: string; displayName: string }) => void;
   'make-move': (data: MakeMoveData) => void;
   'leave-room': (data: { roomId: string; phoneNumber: string }) => void;
   'restart-game': (data: { roomId: string; phoneNumber: string }) => void;
