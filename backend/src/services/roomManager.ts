@@ -1,14 +1,13 @@
 import { v4 as uuidv4 } from 'uuid';
 import { ActiveGame, Board, Room } from '../models/types';
 import { TicTacToeEngine } from './ticTacToe';
+import { insertRoom, getRoomById, updateRoomStatus, deleteRoomFromDb, cleanupExpiredRoomsFromDb } from './db';
+import { saveGame, getGame, deleteGame } from './redis';
 
 const ROOM_EXPIRY_MS = 30 * 60 * 1000; // 30 minutes
 
 class RoomManager {
-  private rooms: Map<string, Room> = new Map();
-  private activeGames: Map<string, ActiveGame> = new Map();
-
-  createRoom(hostPhone: string): { room: Room; game: ActiveGame } {
+  async createRoom(hostPhone: string): Promise<{ room: Room; game: ActiveGame }> {
     const roomId = uuidv4().slice(0, 8);
     const now = new Date();
 
@@ -29,17 +28,18 @@ class RoomManager {
       winner: null,
     };
 
-    this.rooms.set(roomId, room);
-    this.activeGames.set(roomId, game);
+    await insertRoom(room);
+    await saveGame(game);
 
     return { room, game };
   }
 
-  getRoom(roomId: string): Room | undefined {
-    const room = this.rooms.get(roomId);
+  async getRoom(roomId: string): Promise<Room | undefined> {
+    const room = await getRoomById(roomId);
     if (!room) return undefined;
 
     if (Date.now() > room.expires_at.getTime()) {
+      await updateRoomStatus(roomId, 'EXPIRED');
       room.status = 'EXPIRED';
       return room;
     }
@@ -47,24 +47,27 @@ class RoomManager {
     return room;
   }
 
-  getActiveGame(roomId: string): ActiveGame | undefined {
-    return this.activeGames.get(roomId);
+  async getActiveGame(roomId: string): Promise<ActiveGame | undefined> {
+    return getGame(roomId);
   }
 
-  joinRoom(roomId: string, phoneNumber: string, isReconnect: boolean = false): { room: Room; game: ActiveGame } | { error: string } {
-    const room = this.rooms.get(roomId);
+  async joinRoom(
+    roomId: string,
+    phoneNumber: string,
+    isReconnect: boolean = false
+  ): Promise<{ room: Room; game: ActiveGame } | { error: string }> {
+    const room = await getRoomById(roomId);
     if (!room) return { error: 'Room not found' };
 
     if (Date.now() > room.expires_at.getTime()) {
-      room.status = 'EXPIRED';
+      await updateRoomStatus(roomId, 'EXPIRED');
       return { error: 'Room has expired' };
     }
 
-    const game = this.activeGames.get(roomId);
+    const game = await getGame(roomId);
     if (!game) return { error: 'Game not found' };
 
     if (isReconnect) {
-      // For reconnection, verify the player was already in this game
       if (!game.players.includes(phoneNumber)) {
         return { error: 'Player not found in this game' };
       }
@@ -76,14 +79,21 @@ class RoomManager {
     game.players.push(phoneNumber);
     room.status = 'PLAYING';
 
+    await updateRoomStatus(roomId, 'PLAYING');
+    await saveGame(game);
+
     return { room, game };
   }
 
-  makeMove(roomId: string, phoneNumber: string, position: number): { game: ActiveGame } | { error: string } {
-    const game = this.activeGames.get(roomId);
+  async makeMove(
+    roomId: string,
+    phoneNumber: string,
+    position: number
+  ): Promise<{ game: ActiveGame } | { error: string }> {
+    const game = await getGame(roomId);
     if (!game) return { error: 'Game not found' };
 
-    const room = this.rooms.get(roomId);
+    const room = await getRoomById(roomId);
     if (!room || room.status !== 'PLAYING') return { error: 'Game is not active' };
 
     const playerIndex = game.players.indexOf(phoneNumber);
@@ -100,19 +110,21 @@ class RoomManager {
     game.winner = winner;
 
     if (winner) {
-      room.status = 'FINISHED';
+      await updateRoomStatus(roomId, 'FINISHED');
     } else {
       game.currentTurn = TicTacToeEngine.switchPlayer(game.currentTurn);
     }
 
+    await saveGame(game);
+
     return { game };
   }
 
-  restartGame(roomId: string, phoneNumber: string): { game: ActiveGame } | { error: string } {
-    const room = this.rooms.get(roomId);
+  async restartGame(roomId: string, phoneNumber: string): Promise<{ game: ActiveGame } | { error: string }> {
+    const room = await getRoomById(roomId);
     if (!room) return { error: 'Room not found' };
 
-    const game = this.activeGames.get(roomId);
+    const game = await getGame(roomId);
     if (!game) return { error: 'Game not found' };
 
     const playerIndex = game.players.indexOf(phoneNumber);
@@ -123,11 +135,14 @@ class RoomManager {
     game.winner = null;
     room.status = 'PLAYING';
 
+    await updateRoomStatus(roomId, 'PLAYING');
+    await saveGame(game);
+
     return { game };
   }
 
-  removePlayer(roomId: string, phoneNumber: string): void {
-    const game = this.activeGames.get(roomId);
+  async removePlayer(roomId: string, phoneNumber: string): Promise<void> {
+    const game = await getGame(roomId);
     if (!game) return;
 
     const playerIndex = game.players.indexOf(phoneNumber);
@@ -135,25 +150,21 @@ class RoomManager {
       game.players.splice(playerIndex, 1);
     }
 
-    const room = this.rooms.get(roomId);
-    if (room) {
-      room.status = 'FINISHED';
-    }
+    await updateRoomStatus(roomId, 'FINISHED');
+    await saveGame(game);
   }
 
-  deleteRoom(roomId: string): void {
-    this.rooms.delete(roomId);
-    this.activeGames.delete(roomId);
+  async deleteRoom(roomId: string): Promise<void> {
+    await deleteRoomFromDb(roomId);
+    await deleteGame(roomId);
   }
 
-  cleanupExpiredRooms(): void {
-    const now = Date.now();
-    for (const [roomId, room] of this.rooms.entries()) {
-      if (now > room.expires_at.getTime() || room.status === 'FINISHED') {
-        this.rooms.delete(roomId);
-        this.activeGames.delete(roomId);
-      }
-    }
+  async cleanupExpiredRooms(): Promise<void> {
+    // Clean up from PostgreSQL
+    await cleanupExpiredRoomsFromDb();
+    // Redis keys have TTL, so they'll expire automatically
+    // But we can still clean them up explicitly
+    // (In production we'd scan for expired keys, but for MVP this is fine)
   }
 }
 
