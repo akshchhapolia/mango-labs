@@ -4,7 +4,7 @@ import { CreateRoomRequest, JoinRoomRequest } from '../models/types';
 
 const BASE_URL = process.env.BASE_URL || 'http://localhost:5173';
 
-export function createRoom(req: Request, res: Response): void {
+export async function createRoom(req: Request, res: Response): Promise<void> {
   const { hostPhone } = req.body as CreateRoomRequest;
 
   if (!hostPhone) {
@@ -12,7 +12,7 @@ export function createRoom(req: Request, res: Response): void {
     return;
   }
 
-  const { room, game } = roomManager.createRoom(hostPhone);
+  const { room, game } = await roomManager.createRoom(hostPhone);
 
   res.status(201).json({
     success: true,
@@ -24,7 +24,7 @@ export function createRoom(req: Request, res: Response): void {
   });
 }
 
-export function joinRoom(req: Request, res: Response): void {
+export async function joinRoom(req: Request, res: Response): Promise<void> {
   const { id } = req.params;
   const { phoneNumber } = req.body as JoinRoomRequest;
 
@@ -33,7 +33,7 @@ export function joinRoom(req: Request, res: Response): void {
     return;
   }
 
-  const result = roomManager.joinRoom(id, phoneNumber);
+  const result = await roomManager.joinRoom(id, phoneNumber);
 
   if ('error' in result) {
     res.status(400).json({ success: false, error: result.error });
@@ -49,16 +49,16 @@ export function joinRoom(req: Request, res: Response): void {
   });
 }
 
-export function getRoom(req: Request, res: Response): void {
+export async function getRoom(req: Request, res: Response): Promise<void> {
   const { id } = req.params;
 
-  const room = roomManager.getRoom(id);
+  const room = await roomManager.getRoom(id);
   if (!room) {
     res.status(404).json({ success: false, error: 'Room not found' });
     return;
   }
 
-  const game = roomManager.getActiveGame(id);
+  const game = await roomManager.getActiveGame(id);
 
   res.json({
     success: true,
