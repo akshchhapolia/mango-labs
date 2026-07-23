@@ -51,11 +51,9 @@ class RoomManager {
     return this.activeGames.get(roomId);
   }
 
-  joinRoom(roomId: string, phoneNumber: string): { room: Room; game: ActiveGame } | { error: string } {
+  joinRoom(roomId: string, phoneNumber: string, isReconnect: boolean = false): { room: Room; game: ActiveGame } | { error: string } {
     const room = this.rooms.get(roomId);
     if (!room) return { error: 'Room not found' };
-
-    if (room.status !== 'WAITING') return { error: 'Game already in progress or finished' };
 
     if (Date.now() > room.expires_at.getTime()) {
       room.status = 'EXPIRED';
@@ -64,6 +62,16 @@ class RoomManager {
 
     const game = this.activeGames.get(roomId);
     if (!game) return { error: 'Game not found' };
+
+    if (isReconnect) {
+      // For reconnection, verify the player was already in this game
+      if (!game.players.includes(phoneNumber)) {
+        return { error: 'Player not found in this game' };
+      }
+      return { room, game };
+    }
+
+    if (room.status !== 'WAITING') return { error: 'Game already in progress or finished' };
 
     game.players.push(phoneNumber);
     room.status = 'PLAYING';

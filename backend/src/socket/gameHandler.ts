@@ -6,7 +6,11 @@ export function setupGameHandlers(io: Server, socket: Socket): void {
   socket.on('join-room', (data: { roomId: string; phoneNumber: string }) => {
     const { roomId, phoneNumber } = data;
 
-    const result = roomManager.joinRoom(roomId, phoneNumber);
+    // Check if this is a reconnection (player already in the game)
+    const existingGame = roomManager.getActiveGame(roomId);
+    const isReconnect = existingGame?.players.includes(phoneNumber) ?? false;
+
+    const result = roomManager.joinRoom(roomId, phoneNumber, isReconnect);
     if ('error' in result) {
       socket.emit('error', { message: result.error });
       return;
@@ -16,17 +20,19 @@ export function setupGameHandlers(io: Server, socket: Socket): void {
     socket.data.roomId = roomId;
     socket.data.phoneNumber = phoneNumber;
 
-    // Notify the host that a player joined
-    socket.to(roomId).emit('player-joined', { phoneNumber });
+    if (!isReconnect) {
+      // New player joining — notify the host
+      socket.to(roomId).emit('player-joined', { phoneNumber });
+    }
 
-    // Send current game state to the joining player
+    // Send current game state to the (re)joining player
     const game = roomManager.getActiveGame(roomId);
     if (game) {
-      io.to(roomId).emit('game-state', {
+      socket.emit('game-state', {
         board: game.board,
         currentTurn: game.currentTurn,
         players: game.players,
-        status: 'PLAYING',
+        status: game.players.length === 2 ? 'PLAYING' : 'WAITING',
         winner: game.winner,
       });
     }
