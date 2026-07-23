@@ -44,6 +44,7 @@ export default function GameScreen({
   const winningCombo = getWinningCombo(board);
   const hostName = playerNames[players[0]] || (isHost ? 'You' : 'Partner');
   const partnerName = playerNames[players[1]] || (isHost ? 'Partner' : 'You');
+  const currentPlayerName = currentTurn === 'X' ? hostName : partnerName;
 
   return (
     <div className="screen game-screen">
@@ -56,7 +57,7 @@ export default function GameScreen({
           {isMyTurn ? (
             <span className="your-turn">Your Turn</span>
           ) : (
-            <span className="their-turn">Partner's Turn</span>
+            <span className="their-turn">{currentPlayerName}'s Turn</span>
           )}
         </div>
         <div className="player-indicator">
