@@ -98,13 +98,33 @@ export function setupGameHandlers(io: Server, socket: Socket): void {
 
   socket.on('disconnect', () => {
     const { roomId, phoneNumber } = socket.data;
-    if (roomId && phoneNumber) {
-      roomManager.removePlayer(roomId, phoneNumber);
-      socket.to(roomId).emit('player-left', { phoneNumber });
+    if (!roomId || !phoneNumber) return;
 
-      setTimeout(() => {
-        roomManager.deleteRoom(roomId);
-      }, 5000);
+    // Give the player a grace period to reconnect before removing them
+    const game = roomManager.getActiveGame(roomId);
+    if (!game) return;
+
+    // Check if any other socket in this room is still connected
+    const roomSockets = io.sockets.adapter.rooms.get(roomId);
+    const hasOtherSocket = roomSockets && roomSockets.size > 0;
+
+    if (!hasOtherSocket) {
+      // No sockets left in the room — wait a bit for reconnection
+      const disconnectTimeout = setTimeout(() => {
+        // Check if the player reconnected (socket data re-set by join-room)
+        const stillEmpty = io.sockets.adapter.rooms.get(roomId);
+        if (!stillEmpty || stillEmpty.size === 0) {
+          roomManager.removePlayer(roomId, phoneNumber);
+          socket.to(roomId).emit('player-left', { phoneNumber });
+          setTimeout(() => roomManager.deleteRoom(roomId), 5000);
+        }
+      }, 15000);
+
+      // Store the timeout so we can cancel it if the player reconnects
+      socket.data.disconnectTimeout = disconnectTimeout;
+    } else {
+      // Another socket is still in the room (other player), just notify them
+      socket.to(roomId).emit('player-left', { phoneNumber });
     }
   });
 }
