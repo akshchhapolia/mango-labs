@@ -1,0 +1,104 @@
+import { Server, Socket } from 'socket.io';
+import { roomManager } from '../services/roomManager';
+import { MakeMoveData } from '../models/types';
+
+export function setupGameHandlers(io: Server, socket: Socket): void {
+  socket.on('join-room', (data: { roomId: string; phoneNumber: string }) => {
+    const { roomId, phoneNumber } = data;
+
+    const result = roomManager.joinRoom(roomId, phoneNumber);
+    if ('error' in result) {
+      socket.emit('error', { message: result.error });
+      return;
+    }
+
+    socket.join(roomId);
+    socket.data.roomId = roomId;
+    socket.data.phoneNumber = phoneNumber;
+
+    // Notify the host that a player joined
+    socket.to(roomId).emit('player-joined', { phoneNumber });
+
+    // Send current game state to the joining player
+    const game = roomManager.getActiveGame(roomId);
+    if (game) {
+      io.to(roomId).emit('game-state', {
+        board: game.board,
+        currentTurn: game.currentTurn,
+        players: game.players,
+        status: 'PLAYING',
+        winner: game.winner,
+      });
+    }
+  });
+
+  socket.on('make-move', (data: MakeMoveData) => {
+    const { roomId, phoneNumber, position } = data;
+
+    const result = roomManager.makeMove(roomId, phoneNumber, position);
+    if ('error' in result) {
+      socket.emit('error', { message: result.error });
+      return;
+    }
+
+    const game = result.game;
+    const moveNumber = game.board.filter((cell) => cell !== null).length;
+
+    // Broadcast the move to everyone in the room
+    io.to(roomId).emit('move-made', {
+      board: game.board,
+      currentTurn: game.currentTurn,
+      moveNumber,
+    });
+
+    // If game is over, emit game-over event
+    if (game.winner) {
+      io.to(roomId).emit('game-over', {
+        winner: game.winner,
+        board: game.board,
+      });
+    }
+  });
+
+  socket.on('restart-game', (data: { roomId: string; phoneNumber: string }) => {
+    const { roomId, phoneNumber } = data;
+
+    const result = roomManager.restartGame(roomId, phoneNumber);
+    if ('error' in result) {
+      socket.emit('error', { message: result.error });
+      return;
+    }
+
+    const game = result.game;
+    io.to(roomId).emit('restart', {
+      board: game.board,
+      currentTurn: game.currentTurn,
+    });
+  });
+
+  socket.on('leave-room', (data: { roomId: string; phoneNumber: string }) => {
+    const { roomId, phoneNumber } = data;
+
+    roomManager.removePlayer(roomId, phoneNumber);
+    socket.leave(roomId);
+
+    socket.to(roomId).emit('player-left', { phoneNumber });
+
+    // Clean up empty rooms after a delay
+    setTimeout(() => {
+      roomManager.deleteRoom(roomId);
+    }, 5000);
+  });
+
+  socket.on('disconnect', () => {
+    const { roomId, phoneNumber } = socket.data;
+    if (roomId && phoneNumber) {
+      roomManager.removePlayer(roomId, phoneNumber);
+      socket.to(roomId).emit('player-left', { phoneNumber });
+
+      setTimeout(() => {
+        roomManager.deleteRoom(roomId);
+      }, 5000);
+    }
+  });
+}
