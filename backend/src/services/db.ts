@@ -1,13 +1,19 @@
 import { Pool, QueryResult } from 'pg';
 import { Room } from '../models/types';
 
-const pool = new Pool({
-  host: 'localhost',
-  port: 5432,
-  database: 'couple_game',
-  max: 10,
-  idleTimeoutMillis: 30000,
-});
+const pool = process.env.DATABASE_URL
+  ? new Pool({
+      connectionString: process.env.DATABASE_URL,
+      max: 10,
+      idleTimeoutMillis: 30000,
+    })
+  : new Pool({
+      host: 'localhost',
+      port: 5432,
+      database: 'couple_game',
+      max: 10,
+      idleTimeoutMillis: 30000,
+    });
 
 pool.on('error', (err: Error) => {
   console.error('Unexpected PostgreSQL pool error:', err);
@@ -15,6 +21,22 @@ pool.on('error', (err: Error) => {
 
 export async function query(text: string, params?: unknown[]): Promise<QueryResult> {
   return pool.query(text, params);
+}
+
+export async function ensureSchema(): Promise<void> {
+  await query(`
+    CREATE TABLE IF NOT EXISTS rooms (
+      id VARCHAR(8) PRIMARY KEY,
+      game VARCHAR(50) NOT NULL DEFAULT 'tic-tac-toe',
+      host_phone VARCHAR(64) NOT NULL,
+      status VARCHAR(10) NOT NULL DEFAULT 'WAITING',
+      created_at TIMESTAMP NOT NULL DEFAULT NOW(),
+      expires_at TIMESTAMP NOT NULL
+    );
+
+    CREATE INDEX IF NOT EXISTS idx_rooms_status ON rooms(status);
+    CREATE INDEX IF NOT EXISTS idx_rooms_expires_at ON rooms(expires_at);
+  `);
 }
 
 export async function insertRoom(room: Room): Promise<void> {

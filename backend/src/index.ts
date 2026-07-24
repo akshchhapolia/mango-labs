@@ -8,7 +8,7 @@ import { Server } from 'socket.io';
 import roomRoutes from './routes/roomRoutes';
 import { setupGameHandlers } from './socket/gameHandler';
 import { roomManager } from './services/roomManager';
-import { closePool } from './services/db';
+import { closePool, ensureSchema } from './services/db';
 import { disconnectRedis } from './services/redis';
 
 const PORT = process.env.PORT || 3001;
@@ -46,8 +46,16 @@ const cleanupInterval = setInterval(() => {
   roomManager.cleanupExpiredRooms();
 }, 60 * 1000); // every minute
 
-server.listen(PORT, () => {
-  console.log(`Backend running on port ${PORT}`);
+async function startServer() {
+  await ensureSchema();
+  server.listen(PORT, () => {
+    console.log(`Backend running on port ${PORT}`);
+  });
+}
+
+startServer().catch((error) => {
+  console.error('Failed to start backend:', error);
+  process.exit(1);
 });
 
 // Graceful shutdown
