@@ -4,7 +4,6 @@ interface HomeScreenProps {
   displayName: string;
   setDisplayName: (val: string) => void;
   pendingRoomId: string | null;
-  role: 'host' | 'partner';
   phoneNumber: string;
   setPhoneNumber: (val: string) => void;
   onCreateRoom: () => void;
@@ -18,7 +17,6 @@ export default function HomeScreen({
   displayName,
   setDisplayName,
   pendingRoomId,
-  role,
   phoneNumber,
   setPhoneNumber,
   onCreateRoom,
@@ -28,7 +26,8 @@ export default function HomeScreen({
   loading,
 }: HomeScreenProps) {
   const [joinId, setJoinId] = useState('');
-  const [showJoin, setShowJoin] = useState(role === 'partner' && !pendingRoomId);
+  const [showJoin, setShowJoin] = useState(false);
+  const isInvite = Boolean(pendingRoomId);
 
   const handleJoin = () => {
     if (!joinId.trim()) {
@@ -47,9 +46,7 @@ export default function HomeScreen({
       </div>
 
       <div className="card">
-        {role === 'partner' && (
-          <p className="invite-message">{pendingRoomId ? "You've been invited to play!" : 'Join a game as Partner'}</p>
-        )}
+        {isInvite && <p className="invite-message">You've been invited to play!</p>}
 
         <label className="input-label">Your Name</label>
         <input
@@ -63,14 +60,14 @@ export default function HomeScreen({
           }}
         />
 
-        {role === 'host' && (
+        {!isInvite && (
           <>
             <label className="input-label input-label-spaced">Your Phone Number</label>
             <input
               type="tel"
               className="phone-input"
               placeholder="+1 (555) 123-4567"
-              value={phoneNumber}
+              value={phoneNumber.startsWith('guest-') ? '' : phoneNumber}
               onChange={(e) => {
                 setPhoneNumber(e.target.value);
                 setError('');
@@ -82,38 +79,42 @@ export default function HomeScreen({
         {error && <p className="error-text">{error}</p>}
 
         <div className="button-group">
-          {role === 'host' && (
-            <button className="btn btn-primary" onClick={onCreateRoom} disabled={loading}>
-              {loading ? 'Creating...' : 'Create a Game'}
-            </button>
-          )}
-
-          {role === 'partner' && pendingRoomId && (
+          {isInvite ? (
             <button className="btn btn-primary" onClick={onCreateRoom} disabled={loading}>
               {loading ? 'Joining...' : 'Join Game'}
             </button>
-          )}
-
-          {role === 'host' && <button className="btn btn-secondary" onClick={() => setShowJoin(!showJoin)} disabled={loading}>
-            {showJoin ? 'Cancel' : 'Join a Game'}
-          </button>}
-
-          {showJoin && !pendingRoomId && (
-            <div className="join-input-group">
-              <input
-                type="text"
-                className="room-input"
-                placeholder="Enter Room ID"
-                value={joinId}
-                onChange={(e) => {
-                  setJoinId(e.target.value);
-                  setError('');
-                }}
-              />
-              <button className="btn btn-accent" onClick={handleJoin} disabled={loading}>
-                {loading ? 'Joining...' : 'Join'}
+          ) : (
+            <>
+              <button className="btn btn-primary" onClick={onCreateRoom} disabled={loading}>
+                {loading ? 'Creating...' : 'Create a Game'}
               </button>
-            </div>
+
+              <button
+                className="btn btn-secondary"
+                onClick={() => setShowJoin(!showJoin)}
+                disabled={loading}
+              >
+                {showJoin ? 'Cancel' : 'Join a Game'}
+              </button>
+
+              {showJoin && (
+                <div className="join-input-group">
+                  <input
+                    type="text"
+                    className="room-input"
+                    placeholder="Enter Room ID"
+                    value={joinId}
+                    onChange={(e) => {
+                      setJoinId(e.target.value);
+                      setError('');
+                    }}
+                  />
+                  <button className="btn btn-accent" onClick={handleJoin} disabled={loading}>
+                    {loading ? 'Joining...' : 'Join'}
+                  </button>
+                </div>
+              )}
+            </>
           )}
         </div>
       </div>

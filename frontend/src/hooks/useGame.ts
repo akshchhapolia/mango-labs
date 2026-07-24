@@ -20,8 +20,6 @@ export function checkWinner(board: Board): PlayerSymbol | 'draw' | null {
 }
 
 const STORAGE_KEY = 'couple_game_session';
-const ROLE_KEY = 'couple_game_role';
-type PlayerRole = 'host' | 'partner';
 
 interface StoredSession {
   phoneNumber: string;
@@ -56,11 +54,6 @@ function clearSession(): void {
 }
 
 export function useGame() {
-  const [role, setRole] = useState<PlayerRole>(() => {
-    const parts = window.location.pathname.split('/');
-    if (parts[1] === 'join' && parts[2]) return 'partner';
-    return localStorage.getItem(ROLE_KEY) === 'partner' ? 'partner' : 'host';
-  });
   const [displayName, setDisplayName] = useState('');
   const [phoneNumber, setPhoneNumber] = useState('');
   const [roomId, setRoomId] = useState('');
