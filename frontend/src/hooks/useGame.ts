@@ -207,6 +207,13 @@ export function useGame() {
   // Restore session on mount (reconnection after refresh)
   // Skip if the user opened an invite link (handled by App.tsx)
   useEffect(() => {
+    // Clear any previously sticky Partner role so `/` always shows Host setup.
+    try {
+      localStorage.removeItem('couple_game_role');
+    } catch {
+      // ignore
+    }
+
     const pathParts = window.location.pathname.split('/');
     const pendingRoomId = pathParts[1] === 'join' && pathParts[2] ? pathParts[2] : null;
     if (pendingRoomId) {
@@ -221,8 +228,6 @@ export function useGame() {
       setDisplayName(session.displayName || 'Player');
       setRoomId(session.roomId);
       setIsHost(session.isHost);
-      setRole(session.isHost ? 'host' : 'partner');
-      localStorage.setItem(ROLE_KEY, session.isHost ? 'host' : 'partner');
       if (session.isHost && screen === 'home') {
         setInviteLink(`${window.location.origin}/join/${session.roomId}`);
       }
@@ -255,8 +260,6 @@ export function useGame() {
       setRoomId(data.roomId);
       setInviteLink(data.inviteLink);
       setIsHost(true);
-      setRole('host');
-      localStorage.setItem(ROLE_KEY, 'host');
       saveSession({ phoneNumber: phoneNumber.trim(), displayName: displayName.trim(), roomId: data.roomId, isHost: true });
       setupSocketListeners(data.roomId);
       setScreen('waiting');
@@ -289,8 +292,6 @@ export function useGame() {
       setPhoneNumber(playerId);
       setRoomId(rid);
       setIsHost(false);
-      setRole('partner');
-      localStorage.setItem(ROLE_KEY, 'partner');
       saveSession({ phoneNumber: playerId, displayName: displayName.trim(), roomId: rid, isHost: false });
       setupSocketListeners(rid, playerId, displayName.trim());
       return true;
@@ -379,7 +380,6 @@ export function useGame() {
   }, [clearListeners]);
 
   return {
-    role,
     displayName,
     setDisplayName,
     phoneNumber,
