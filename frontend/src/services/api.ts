@@ -1,4 +1,5 @@
-const API_BASE = '/rooms';
+const BACKEND_URL = import.meta.env.VITE_API_URL?.replace(/\/$/, '');
+const API_BASE = BACKEND_URL ? `${BACKEND_URL}/rooms` : '/rooms';
 
 interface ApiResponse<T> {
   success: boolean;
