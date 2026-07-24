@@ -13,6 +13,7 @@ export default function App() {
   });
 
   const {
+    role,
     displayName,
     setDisplayName,
     phoneNumber,
@@ -55,6 +56,7 @@ export default function App() {
           displayName={displayName}
           setDisplayName={setDisplayName}
           pendingRoomId={pendingRoomId}
+          role={role}
           phoneNumber={phoneNumber}
           setPhoneNumber={setPhoneNumber}
           onCreateRoom={handlePrimaryAction}

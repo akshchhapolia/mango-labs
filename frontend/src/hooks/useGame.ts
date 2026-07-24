@@ -20,6 +20,8 @@ export function checkWinner(board: Board): PlayerSymbol | 'draw' | null {
 }
 
 const STORAGE_KEY = 'couple_game_session';
+const ROLE_KEY = 'couple_game_role';
+type PlayerRole = 'host' | 'partner';
 
 interface StoredSession {
   phoneNumber: string;
@@ -54,6 +56,11 @@ function clearSession(): void {
 }
 
 export function useGame() {
+  const [role, setRole] = useState<PlayerRole>(() => {
+    const parts = window.location.pathname.split('/');
+    if (parts[1] === 'join' && parts[2]) return 'partner';
+    return localStorage.getItem(ROLE_KEY) === 'partner' ? 'partner' : 'host';
+  });
   const [displayName, setDisplayName] = useState('');
   const [phoneNumber, setPhoneNumber] = useState('');
   const [roomId, setRoomId] = useState('');
@@ -221,6 +228,8 @@ export function useGame() {
       setDisplayName(session.displayName || 'Player');
       setRoomId(session.roomId);
       setIsHost(session.isHost);
+      setRole(session.isHost ? 'host' : 'partner');
+      localStorage.setItem(ROLE_KEY, session.isHost ? 'host' : 'partner');
       if (session.isHost && screen === 'home') {
         setInviteLink(`${window.location.origin}/join/${session.roomId}`);
       }
@@ -253,6 +262,8 @@ export function useGame() {
       setRoomId(data.roomId);
       setInviteLink(data.inviteLink);
       setIsHost(true);
+      setRole('host');
+      localStorage.setItem(ROLE_KEY, 'host');
       saveSession({ phoneNumber: phoneNumber.trim(), displayName: displayName.trim(), roomId: data.roomId, isHost: true });
       setupSocketListeners(data.roomId);
       setScreen('waiting');
@@ -285,6 +296,8 @@ export function useGame() {
       setPhoneNumber(playerId);
       setRoomId(rid);
       setIsHost(false);
+      setRole('partner');
+      localStorage.setItem(ROLE_KEY, 'partner');
       saveSession({ phoneNumber: playerId, displayName: displayName.trim(), roomId: rid, isHost: false });
       setupSocketListeners(rid, playerId, displayName.trim());
       return true;
@@ -373,6 +386,7 @@ export function useGame() {
   }, [clearListeners]);
 
   return {
+    role,
     displayName,
     setDisplayName,
     phoneNumber,
