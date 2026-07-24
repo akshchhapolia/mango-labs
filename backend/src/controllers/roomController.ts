@@ -35,7 +35,10 @@ export async function joinRoom(req: Request, res: Response): Promise<void> {
 
   const room = await roomManager.getRoom(id);
   if (!room) {
-    res.status(404).json({ success: false, error: 'Room not found' });
+    res.status(404).json({
+      success: false,
+      error: 'Room not found. Ask your partner to create a new game and share a fresh invite link.',
+    });
     return;
   }
 

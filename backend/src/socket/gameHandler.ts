@@ -107,12 +107,19 @@ export function setupGameHandlers(io: Server, socket: Socket): void {
         io.sockets.sockets.get(socketId)?.data.phoneNumber === phoneNumber
       );
 
-      if (!hasReconnected) {
-        const game = await roomManager.getActiveGame(roomId);
-        const closedByName = game?.playerNames?.[phoneNumber] || 'The other player';
-        io.to(roomId).emit('game-closed', { closedByName });
-        await roomManager.deleteRoom(roomId);
+      if (hasReconnected) return;
+
+      const room = await roomManager.getRoom(roomId);
+      // Keep WAITING rooms alive so invite links still work while the Host
+      // briefly disconnects (phone sleep, tab switch, network blip).
+      if (!room || room.status === 'WAITING') {
+        return;
       }
+
+      const game = await roomManager.getActiveGame(roomId);
+      const closedByName = game?.playerNames?.[phoneNumber] || 'The other player';
+      io.to(roomId).emit('game-closed', { closedByName });
+      await roomManager.deleteRoom(roomId);
     }, 15000);
   });
 }
