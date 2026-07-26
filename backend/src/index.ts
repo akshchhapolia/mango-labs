@@ -12,19 +12,22 @@ import { closePool, ensureSchema } from './services/db';
 import { disconnectRedis } from './services/redis';
 
 const PORT = process.env.PORT || 3001;
-const CORS_ORIGIN = process.env.CORS_ORIGIN || 'http://localhost:5173';
+const CORS_ORIGINS = (process.env.CORS_ORIGIN || 'http://localhost:5173')
+  .split(',')
+  .map((origin) => origin.trim())
+  .filter(Boolean);
 
 const app = express();
 const server = http.createServer(app);
 
 const io = new Server(server, {
   cors: {
-    origin: CORS_ORIGIN,
+    origin: CORS_ORIGINS,
     methods: ['GET', 'POST'],
   },
 });
 
-app.use(cors({ origin: CORS_ORIGIN }));
+app.use(cors({ origin: CORS_ORIGINS }));
 app.use(express.json());
 
 // Health check
